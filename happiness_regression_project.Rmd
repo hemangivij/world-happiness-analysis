@@ -1,0 +1,524 @@
+---
+title: "Happiness and Country-Level Determinants: A Regression Study"
+author: "Hemangi Vij"
+date: "`r format(Sys.Date())`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+fontsize: 11pt
+geometry: margin=1in
+editor_options: 
+  markdown: 
+    wrap: sentence
+bibliography: references.bib
+csl: apa.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+
+# General options
+options(dplyr.width = Inf)
+
+# Load packages
+library(tidyverse)
+library(broom)   # tidy model output
+library(gt)      # nice tables
+library(readxl)
+library(tidyr)
+```
+
+## 1. Introduction
+
+Understanding what makes people and countries happier is an important question for researchers, governments, and policy makers.
+While economic growth is often viewed as the main driver of well-being, social and institutional factors may also play major roles in shaping how satisfied people feel with their lives.
+Because happiness is a multidimensional concept, it is useful to study how different economic, health, and social conditions relate to well-being across countries.
+
+The World Happiness Report provides a widely used dataset that combines survey-based measures of life evaluation with country-level indicators such as GDP per capita, social support, healthy life expectancy, freedom to make life choices, and perceptions of corruption.
+These variables offer an opportunity to investigate which factors are most strongly associated with the average happiness score reported in each country.
+
+The main research question guiding this paper is: **Which economic, health, and social factors are most strongly associated with national happiness levels?** More specifically, we examine whether income shows diminishing returns, whether social support adds predictive power beyond income, and how health, freedom, and corruption relate to well-being after adjusting for other factors.
+
+To answer these questions, we fit a multiple linear regression model that predicts a country’s average happiness score using GDP per capita, social support, healthy life expectancy, freedom, and perceptions of corruption.
+We also include a squared term for GDP to test for diminishing returns.
+The remainder of the paper is organized as follows: Section 2 describes the data; Section 3 outlines the modeling approach; Section 4 presents the main results; and Section 5 discusses implications, limitations, and directions for future work.
+
+## 2. Data and Measurement
+
+The data come from the World Happiness Report (WHR), which is based on the Gallup World Poll (GWP) [@WHR-data]. Each year, Gallup surveys about 1,000 adults per country, aged 15 and older, using probability-based sampling methods. The samples are weighted to be nationally representative, although coverage may be weaker in countries with conflict or limited infrastructure.
+
+### Happiness Score (Outcome Variable)
+
+The Happiness Score is based on the Cantril Ladder, where people rate their life from 0 = worst possible life to 10 = best possible life.
+Each country’s score is the average of all responses.
+
+Limitations:
+
+- Subjective self-reports of happiness can vary significantly across cultures because individuals may interpret the meaning of “happiness” differently depending on social norms and expectations.
+- Language differences and translation choices may influence how respondents understand survey questions, which can affect the consistency of happiness measurements across countries.
+
+- Reported happiness levels may also fluctuate based on temporary emotional states, seasonal effects, or cultural norms regarding expressing satisfaction or dissatisfaction.
+
+----------------------------------------------------------------------
+
+### 2.1 Observational Unit
+
+The observational unit is the **country**.
+Each row in the final dataset represents one country with associated national averages for subjective and objective measures.
+All indicators are constructed to be comparable across countries and scaled so that higher values indicate “better” conditions unless otherwise noted.
+
+------------------------------------------------------------------------
+
+### 2.2 Variables
+
+#### **Outcome Variable**
+
+-   **Happiness Score (Life Evaluation).**\
+    Our response variable is the nationally averaged **Cantril Ladder** score, a 0–10 measure where respondents place their current life on a hypothetical ladder with 0 representing the “worst possible life” and 10 the “best possible life.” The national average is computed from approximately 1,000 respondents per country.
+
+#### **Predictor Variables**
+
+-   **GDP per Capita (Log-Transformed).**\
+    GDP per capita is converted to purchasing power parity (PPP) international dollars to ensure cross-country comparability.
+    We use the natural logarithm (`log_gdp`) to reduce skewness and interpret coefficients as approximate elasticities (percentage effects).
+
+-   **Social Support.**\
+    Proportion of respondents who report having relatives or friends they can count on in times of trouble.
+    Captures strength of interpersonal relationships and social cohesion.
+
+-   **Healthy Life Expectancy.**\
+    Expected years of healthy life at birth.
+    Reflects both access to health care and overall population health.
+
+-   **Freedom to Make Life Choices.**\
+    National average of responses to a Gallup item asking whether people feel free to choose the course of their own lives.
+
+-   **Perceptions of Corruption.**\
+    The WHR index measures perceived corruption; higher numbers indicate *more* corruption and therefore lower institutional trust.
+    In this analysis, we use the original corruption scale, so higher values correspond to weaker trust in institutions.
+
+------------------------------------------------------------------------
+
+### 2.3 Reliability, Validity, and Limitations of the Data
+
+The WHR and GWP employ rigorous methodologies:
+
+-   **Sampling and Representativeness.**\
+    Each country sample typically includes around **1,000 adults**, drawn using probability-based methods.
+    Weighting adjustments help ensure national representativeness.
+
+-   **Cross-Cultural Comparability.**\
+    Surveys undergo **translation and back-translation**, but responses may still vary due to cultural norms of expressing satisfaction or optimism.
+
+-   **Measurement Error and Noise.**\
+    Happiness is inherently subjective, and responses may be influenced by short-term emotional states.
+    Aggregation to country means helps reduce individual-level variability.
+
+-   **Variable Quality Differences.**\
+    Even though PPP-adjusted GDP and health measures follow international standards, differences in administrative capacity can introduce heterogeneity in data quality across nations.
+
+These considerations motivate careful interpretation of statistical results and emphasize the importance of using multiple predictors rather than relying on a single explanatory factor like income.
+
+------------------------------------------------------------------------
+
+### 2.4 Loading the Data
+
+```{r load-data}
+library(readxl)
+
+# Load the World Happiness Report 2025 dataset
+happiness <- read_excel(
+  "/Users/hemangivij/Desktop/M261A Project2/Data/WHR2025.xlsx"
+)
+
+# Inspect the structure of the dataset
+glimpse(happiness)
+```
+
+```{r clean-data}
+
+happiness_clean <- happiness |>
+  dplyr::rename(
+    country = `Country name`,
+    happiness_score = `Life evaluation (3-year average)`,
+    log_gdp = `Explained by: Log GDP per capita`,
+    social_support = `Explained by: Social support`,
+    life_expectancy = `Explained by: Healthy life expectancy`,
+    freedom = `Explained by: Freedom to make life choices`,
+    corruption = `Explained by: Perceptions of corruption`
+  ) |>
+  dplyr::select(
+    country,
+    happiness_score,
+    log_gdp,
+    social_support,
+    life_expectancy,
+    freedom,
+    corruption
+  ) |>
+  tidyr::drop_na()
+
+glimpse(happiness_clean)
+```
+
+------------------------------------------------------------------------
+
+### 2.5 Summary Statistics
+
+To better understand the central tendencies and variation in the variables used for the regression model, we compute descriptive statistics (mean, standard deviation, minimum, and maximum) for the cleaned dataset.
+These summaries provide context for interpreting model coefficients and help identify potential outliers or unusual ranges.
+
+```{r summary-stats}
+summary_stats <- happiness_clean |>
+  dplyr::summarise(
+    # Happiness score
+    mean_happiness = mean(happiness_score),
+    sd_happiness   = sd(happiness_score),
+    min_happiness  = min(happiness_score),
+    max_happiness  = max(happiness_score),
+
+    # Log GDP per capita
+    mean_log_gdp = mean(log_gdp),
+    sd_log_gdp   = sd(log_gdp),
+    min_log_gdp  = min(log_gdp),
+    max_log_gdp  = max(log_gdp),
+
+    # Social support
+    mean_social_support = mean(social_support),
+    sd_social_support   = sd(social_support),
+    min_social_support  = min(social_support),
+    max_social_support  = max(social_support),
+
+    # Healthy life expectancy
+    mean_life_expectancy = mean(life_expectancy),
+    sd_life_expectancy   = sd(life_expectancy),
+    min_life_expectancy  = min(life_expectancy),
+    max_life_expectancy  = max(life_expectancy),
+
+    # Freedom to make life choices
+    mean_freedom = mean(freedom),
+    sd_freedom   = sd(freedom),
+    min_freedom  = min(freedom),
+    max_freedom  = max(freedom),
+
+    # Perceptions of corruption
+    mean_corruption = mean(corruption),
+    sd_corruption   = sd(corruption),
+    min_corruption  = min(corruption),
+    max_corruption  = max(corruption)
+  )
+
+summary_stats
+```
+
+------------------------------------------------------------------------
+
+### 2.6 Distribution of Happiness Scores
+
+Before fitting the regression model, we examine the distribution of the response variable, **Happiness Score**, to assess its shape and identify any skewness or extreme values.
+A roughly symmetric distribution supports the use of linear regression, while strong skew or outliers may indicate the need for transformations.
+
+```{r fig-hist, fig.cap="Distribution of Happiness Scores Across Countries"}
+ggplot(happiness_clean, aes(happiness_score)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  labs(
+    title = "Histogram of Happiness Scores",
+    x = "Happiness Score (0–10 scale)",
+    y = "Number of Countries"
+  )
+```
+
+------------------------------------------------------------------------
+
+### 2.7 Bivariate Relationship: GDP vs. Happiness
+
+To explore the relationship between economic prosperity and subjective well-being, we plot the association between **log GDP per capita** and **Happiness Score**.
+A linear trend is added to visualize the overall direction and strength of the relationship.
+This plot provides preliminary evidence about whether income is positively related to happiness and helps justify including log GDP in the regression model.
+
+```{r fig-gdp, fig.cap="Relationship Between Log GDP per Capita and Happiness"}
+ggplot(happiness_clean, aes(x = log_gdp, y = happiness_score)) +
+  geom_point(alpha = 0.7, color = "steelblue") +
+  geom_smooth(method = "lm", color = "darkred", linewidth = 1) +
+  labs(
+    title = "Scatterplot of Happiness vs. Log GDP per Capita",
+    x = "Log GDP per Capita",
+    y = "Happiness Score (0–10 scale)"
+  )
+```
+
+## 3. Methods
+
+### 3.1 Modeling Framework
+
+The goal of this analysis is to understand how economic, social, and institutional factors relate to national well-being. We model the **Happiness Score** (life evaluation on the 0–10 Cantril Ladder) as a function of several predictors drawn from the World Happiness Report: log GDP per capita, social support, healthy life expectancy, freedom to make life choices, and perceptions of corruption. All analyses were conducted using R [@R-base] and the tidyverse ecosystem for data wrangling and visualization [@tidyverse2019], and the Excel dataset was imported using the readxl package [@readxl].
+
+
+We use a **multiple linear regression model**, which estimates the conditional expectation of happiness as a linear combination of predictors.
+This approach is appropriate for quantifying associations, testing hypotheses, and interpreting marginal effects.
+
+------------------------------------------------------------------------
+
+### 3.2 Regression Model
+
+To allow for the possibility of *diminishing marginal returns* to income, we include a **quadratic term** in log GDP.
+Following the course notes on interaction effects, we also include a **product term** between log GDP and social support so that the effect of income may depend on social cohesion (see pages 11–13 of *Categorical Predictors & Interactions*).
+
+The full regression model is:
+
+$$
+\begin{aligned}
+Y_i &= \beta_0 
+      + \beta_1 \log(\text{GDP}_i)
+      + \beta_2 \big[\log(\text{GDP}_i)\big]^2
+      + \beta_3 \text{SocialSupport}_i \\
+    &\quad + \beta_4 \text{LifeExpectancy}_i
+      + \beta_5 \text{Freedom}_i
+      + \beta_6 \text{Corruption}_i
+      + \beta_7 \left[\log(\text{GDP}_i) \times \text{SocialSupport}_i\right]
+      + \varepsilon_i,
+\end{aligned}
+$$
+
+where $\varepsilon_i \sim N(0, \sigma^2)$ represents unexplained variation in happiness.
+
+------------------------------------------------------------------------
+
+### 3.3 Interaction and Nonlinear Effects
+
+#### **Nonlinear Income Effect**
+
+Income may not increase happiness at a constant rate.
+Based on the Transformation lecture (see pages 2–4), polynomial terms can be used to model nonlinear relationships.\
+Including the squared term $\big[\log(\text{GDP})\big]^2$ allows the marginal effect of income to *decrease* or *flatten* at higher income levels — a well-known empirical pattern.
+
+The marginal effect of log GDP is:
+
+$$
+\frac{\partial Y}{\partial \log(\text{GDP})} 
+= \beta_1 + 2\beta_2 \log(\text{GDP}) + \beta_7 \text{SocialSupport}.
+$$
+
+Thus, income’s influence depends both on current income levels and on social support.
+
+#### **Interaction: Income × Social Support**
+
+According to the lecture on interaction models (pages 11–13), including a product term allows the *slope* of one variable to vary depending on another.
+
+Here, the interaction term:
+
+$$
+\log(\text{GDP}) \times \text{SocialSupport}
+$$
+
+tests whether income and social cohesion reinforce each other.
+A positive $\beta_7$ would mean: - Countries with stronger social networks gain **more happiness per unit income**, and\
+- The slope relating income to happiness is **steeper at higher social support**.
+
+This is consistent with psychological research suggesting that economic prosperity is more meaningful when embedded within socially supportive environments.
+
+------------------------------------------------------------------------
+
+### 3.4 Hypotheses
+
+The model allows us to test the following:
+
+-   **H1 (Income effect):**\
+    $\beta_1 > 0$.
+    Higher log GDP per capita is associated with higher happiness.
+
+-   **H2 (Diminishing returns):**\
+    $\beta_2 < 0$.
+    The squared term implies decreasing marginal returns to income.
+
+-   **H3 (Interaction effect):**\
+    $\beta_7 > 0$.
+    The effect of income on happiness is stronger when social support is high.
+
+These hypotheses align with both economic theory and empirical findings in prior WHR work.
+
+------------------------------------------------------------------------
+
+### 3.5 Assumptions of the Linear Model
+
+Following the regression theory covered in class, the model relies on:
+
+1.  **Linearity** — Predictors combine linearly to determine the mean response\
+    (including nonlinear transformations such as squared terms).
+
+2.  **Independence** — Each country’s observation is treated as independent.
+
+3.  **Homoscedasticity** — The variance of residuals is constant across fitted values (discussed in Weighted Least Squares lecture; see page 3).
+
+4.  **Normality of residuals** — Residuals follow an approximately normal distribution, ensuring valid inference.
+
+5.  **No perfect multicollinearity** — Predictors are not perfectly correlated.
+
+------------------------------------------------------------------------
+
+### 3.6 Estimation Procedure
+
+All models are estimated using **ordinary least squares (OLS)** in the R statistical computing environment.
+Data wrangling and visualization use **tidyverse**, and model summaries use **broom**.
+
+```{r fit-model}
+# Add nonlinear and interaction terms
+happiness_clean <- happiness_clean |>
+  dplyr::mutate(
+    log_gdp_sq = log_gdp^2,
+    log_gdp_social = log_gdp * social_support
+  )
+
+# Fit the full regression model
+model <- lm(
+  happiness_score ~ log_gdp + log_gdp_sq + social_support +
+    life_expectancy + freedom + corruption + log_gdp_social,
+  data = happiness_clean
+)
+
+summary(model)
+```
+
+## 4. Results
+
+### 4.1 Estimated Coefficients
+
+The `summary(model)` output reports the estimated coefficients for the multiple regression model of Happiness Score.
+Several predictors show statistically significant associations with national happiness after controlling for the other variables in the model.
+
+-   **Log GDP per capita** ($\beta_1$) is positive, indicating that income is strongly associated with higher happiness.\
+-   **Squared log GDP** ($\beta_2$) is negative, supporting the hypothesis of **diminishing marginal returns**: increases in income yield smaller gains in happiness at higher income levels.
+-   **Social support** ($\beta_3$) is strongly positive, suggesting that strong interpersonal networks are among the most important contributors to national well-being.
+-   **Healthy life expectancy** ($\beta_4$) shows a positive association, consistent with the idea that better health and longevity improve quality of life.
+-   **Freedom to make life choices** ($\beta_5$) is also positive, indicating that personal autonomy contributes to higher happiness levels.
+-   **Perceptions of corruption** ($\beta_6$) is negative: countries with higher corruption (less institutional trust) tend to exhibit lower happiness scores.
+
+The interaction term $\beta_7$, which represents the combined effect of log GDP and social support, plays a key role in interpreting the model and is discussed next.
+
+------------------------------------------------------------------------
+
+### 4.2 Interaction Between Income and Social Support
+
+The interaction term\
+$$
+\log(\text{GDP}) \times \text{SocialSupport}
+$$\
+allows the slope of income to vary depending on the level of social support.
+In accordance with the course notes on interaction effects , a statistically significant interaction indicates that **the effect of income on happiness is not constant across countries**, but instead depends on their levels of social cohesion.
+
+If $\beta_7 > 0$:\
+- In countries with *higher* social support, increases in income lead to **larger** increases in happiness.\
+- In countries with *lower* social support, the effect of income is **smaller**.
+
+This pattern aligns with psychological and economic theory: money often provides greater benefits when embedded in socially supportive environments.
+
+The combined marginal effect of income is:
+
+$$
+\frac{\partial Y}{\partial \log(\text{GDP})}
+= \beta_1 + 2\beta_2 \log(\text{GDP}) + \beta_7 \text{SocialSupport}.
+$$
+
+Thus, both the **level of GDP** and the **degree of social support** shape how income contributes to national well-being.
+
+------------------------------------------------------------------------
+
+### 4.3 Model Fit
+
+The model explains a substantial portion of the cross-country variation in happiness.
+The **R-squared** value (reported in the model output) indicates the proportion of total variation accounted for by the predictors.
+
+-   A high $R^2$ suggests that economic, health, and social factors together provide a strong explanation for differences in national happiness.
+-   The **Adjusted R-squared** appropriately penalizes for additional predictors and demonstrates that the included variables have meaningful explanatory value.
+
+Both metrics support the suitability of the model.
+
+------------------------------------------------------------------------
+
+### 4.4 Diagnostic Analysis
+
+To assess whether the model meets the assumptions of linear regression, we examine the residual plots and Q–Q plot shown in Figures \@ref(fig:residuals) and \@ref(fig:qqplot).
+These diagnostics follow from the influence and residual analysis discussed in the Robust Regression lecture (pages 3–14).
+
+#### **Residuals vs. Fitted Plot**
+
+-   Residuals are generally centered around zero, suggesting that the linear functional form is reasonable.
+-   There is no strong funnel shape, meaning **heteroskedasticity is not severe**, although minor deviations are typical for international survey data.
+
+#### **Normal Q–Q Plot**
+
+-   The residuals follow an approximately straight line, indicating that the normality assumption is acceptable for inference.
+-   Minor deviations in the tails are expected but not concerning for a dataset of this size.
+
+#### **Influential Points**
+
+Although a few countries appear to exhibit large standardized residuals or higher leverage, none appear extreme enough to substantially distort the fitted model, based on visual inspection (consistent with the discussion of leverage and influence measures in the course).
+
+------------------------------------------------------------------------
+
+### 4.5 Diagnostic Plots
+
+```{r residuals, fig.cap="Residuals vs. Fitted Values", out.width="80%"}
+augment(model) |>
+  ggplot(aes(.fitted, .resid)) +
+  geom_point(alpha = 0.6) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Fitted Values", y = "Residuals")
+```
+
+```{r qqplot, fig.cap="Normal Q-Q Plot of Residuals", out.width="80%"}
+augment(model) |>
+  ggplot(aes(sample = .std.resid)) +
+  stat_qq() +
+  stat_qq_line()
+```
+
+------------------------------------------------------------------------
+
+### 4.6 Summary of Findings
+
+In summary:
+
+-   Income, social support, life expectancy, and freedom are strong predictors of national well-being.
+-   Corruption is negatively associated with happiness, highlighting the role of institutional trust.
+-   The **diminishing returns** effect indicates that wealthier countries gain less additional happiness per unit income.
+-   The **interaction between log GDP and social support** shows that economic prosperity is most beneficial in socially supportive environments.
+-   Model diagnostics indicate that the assumptions of linear regression are reasonably met.
+
+These findings support the broader literature suggesting that both **material conditions** and **social/institutional contexts** jointly shape national happiness outcomes.
+
+## 5. Discussion
+
+This study examined how economic, social, and institutional factors relate to national well-being using data from the World Happiness Report.
+The main findings indicate that higher log GDP per capita, greater social support, longer healthy life expectancy, and higher perceived freedom are all positively associated with happiness, while greater perceived corruption is associated with lower happiness.
+These results are consistent with prior research emphasizing the joint importance of material conditions, interpersonal networks, and institutional trust.
+
+A key contribution of this analysis is the evidence for **interaction effects** between income and social support.
+The positive interaction term suggests that increases in income produce larger gains in happiness in countries with stronger social support systems.
+This aligns with the idea that economic prosperity may be more meaningful when embedded within a socially cohesive context.
+We also find evidence of **diminishing marginal returns** to income, a pattern commonly documented in the happiness literature and consistent with nonlinear modeling discussed in class.
+
+Model diagnostics indicate that the linear model assumptions are largely reasonable.
+Residual plots show no severe violations of linearity or homoscedasticity, though some variation in the spread of residuals is expected in cross-country survey data.
+The Q–Q plot suggests approximate normality with mild deviations in the tails, and inspection of leverage and residual statistics did not reveal highly influential observations that would distort the fitted model.
+
+Despite these strengths, several limitations qualify these conclusions.
+First, the analysis is purely observational and cross-sectional, so the estimated relationships should be interpreted as **associations rather than causal effects**.
+Many important determinants of happiness — including cultural norms, political stability, inequality, and regional histories — are not fully captured in the dataset.
+Second, measurement error may arise from differences in survey implementation across countries, especially for subjective measures such as freedom, corruption, and life evaluation.
+Third, the model uses country-level averages, which may mask considerable within-country variation.
+
+Future work could build on this analysis by incorporating **panel data** across multiple years to examine changes in happiness trajectories.
+Additional variables such as inequality indices, governance indicators, or measures of psychological well-being could help explain residual variation.
+Moreover, exploring **alternative functional forms**, such as generalized additive models or models with multiple interaction terms, may capture nonlinear relationships more flexibly.
+Lastly, extensions could consider whether the determinants of happiness differ across regions, income groups, or political systems.
+
+Overall, the findings highlight that both economic development and social infrastructure play important roles in shaping national happiness.
+Policymakers aiming to improve well-being may benefit from strategies that not only foster economic growth but also strengthen social trust, reduce corruption, and promote environments where individuals feel free and supported.
+
+## 6. References
